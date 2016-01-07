@@ -1,44 +1,43 @@
 package binstruct
 
 import (
-	"bytes"
-	"reflect"
+	"encoding/binary"
+	"fmt"
 	"io"
+	"reflect"
 )
 
 type Encoder struct {
-	byteBuf encBuffer
+	w         io.Writer
+	byteOrder binary.ByteOrder
 }
 
-type Decoder struct {
-}
-
-func NewEncoder(w *io.Writer) *Encoder {
-	enc := new(Encoder)
-	return enc
+func NewEncoder(w io.Writer, byteOrder binary.ByteOrder) *Encoder {
+	return &Encoder{
+		w:         w,
+		byteOrder: byteOrder,
+	}
 }
 
 func (enc *Encoder) Encode(e interface{}) error {
+	return enc.EncodeValue(reflect.ValueOf(e))
 }
 
 func (enc *Encoder) EncodeValue(value reflect.Value) error {
-	if value.Kind() == reflect.Ptr {
-		panic("binstruct: cannot encode pointer")
+	switch value.Type().Kind() {
+	case reflect.Int,
+		reflect.Int32,
+		reflect.Uint,
+		reflect.Uint32:
+		enc.encodeInt32(value)
+	default:
+		panic(fmt.Sprintf("go-binstruct: cannot encode type: %v", value.Type().Kind()))
 	}
+	return nil
 }
 
-func (enc *Encoder) encode(b *encBuffer, value reflect.Value) {
-	if value.Type().Kind() == reflect.Struct {
-		// TODO: encode struct
-	} else {
-		enc.encodeSingle(b, value)
-	}
-}
-
-func (enc *Encoder) encodeSingle(b *encBuffer, value reflect.Value) {
-
-}
-
-func NewDecoder(b *bytes.Buffer) *Decoder {
-
+func (enc *Encoder) encodeInt32(value reflect.Value) {
+	b := make([]byte, 4, 4)
+	enc.byteOrder.PutUint32(b, uint32(value.Int()))
+	enc.w.Write(b)
 }
