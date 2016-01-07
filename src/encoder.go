@@ -2,6 +2,7 @@ package binstruct
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -29,15 +30,32 @@ func (enc *Encoder) EncodeValue(value reflect.Value) error {
 		reflect.Int32,
 		reflect.Uint,
 		reflect.Uint32:
-		enc.encodeInt32(value)
+		enc.encodeUint32(value)
+	case reflect.Int64,
+		reflect.Uint64:
+		enc.encodeUint64(value)
+	case reflect.Float32:
+		enc.encodeFloat32(value)
+	case reflect.Float64:
+		enc.encodeFloat64(value)
 	default:
-		panic(fmt.Sprintf("go-binstruct: cannot encode type: %v", value.Type().Kind()))
+		return errors.New(fmt.Sprintf("go-binstruct: cannot encode type: %v", value.Type().Kind()))
 	}
 	return nil
 }
 
-func (enc *Encoder) encodeInt32(value reflect.Value) {
-	b := make([]byte, 4, 4)
-	enc.byteOrder.PutUint32(b, uint32(value.Int()))
-	enc.w.Write(b)
+func (enc *Encoder) encodeUint32(value reflect.Value) {
+	binary.Write(enc.w, enc.byteOrder, uint32(value.Int()))
+}
+
+func (enc *Encoder) encodeUint64(value reflect.Value) {
+	binary.Write(enc.w, enc.byteOrder, uint64(value.Int()))
+}
+
+func (enc *Encoder) encodeFloat32(value reflect.Value) {
+	binary.Write(enc.w, enc.byteOrder, float32(value.Float()))
+}
+
+func (enc *Encoder) encodeFloat64(value reflect.Value) {
+	binary.Write(enc.w, enc.byteOrder, float64(value.Float()))
 }
