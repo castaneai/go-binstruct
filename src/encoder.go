@@ -21,10 +21,23 @@ func NewEncoder(w io.Writer, byteOrder binary.ByteOrder) *Encoder {
 }
 
 func (enc *Encoder) Encode(e interface{}) error {
-	return enc.EncodeValue(reflect.ValueOf(e))
+	v, ok := e.(encoding.BinaryMarshaler)
+	if ok {
+		return enc.encodeBinaryMarshaler(v)
+	}
+	return enc.encodeValue(reflect.ValueOf(e))
 }
 
-func (enc *Encoder) EncodeValue(value reflect.Value) error {
+func (enc *Encoder) encodeBinaryMarshaler(v encoding.BinaryMarshaler) error {
+	b, err := v.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	_, errr := enc.w.Write(b)
+	return errr
+}
+
+func (enc *Encoder) encodeValue(value reflect.Value) error {
 	switch value.Type().Kind() {
 	case reflect.Int,
 		reflect.Int32,
@@ -51,22 +64,12 @@ func (enc *Encoder) encodePtr(value reflect.Value) error {
 	case reflect.Struct:
 		return enc.encodeStruct(value.Elem())
 	default:
-		return fmt.Errorf("binstruct: cannot encode pointer to %v type", value.Elem().Kind())
+		return fmt.Errorf("binstruct: cannot encode type: *%v", value.Elem().Kind())
 	}
 }
 
 func (enc *Encoder) encodeStruct(value reflect.Value) error {
-	_, has := value.Type().MethodByName("MarshalBinary")
-	if !has {
-		return fmt.Errorf("binstruct: type: %v has not MarhshalBinary method", value.Type().Name())
-	}
-	b, err := value.Interface().(encoding.BinaryMarshaler).MarshalBinary()
-	fmt.Printf("marshal binary result: %v\n", b)
-	if err != nil {
-		return err
-	}
-	_, errr := enc.w.Write(b)
-	return errr
+	return fmt.Errorf("not implemented")
 }
 
 func (enc *Encoder) encodeUint32(value reflect.Value) error {
