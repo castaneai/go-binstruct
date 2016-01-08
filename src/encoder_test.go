@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/japanese"
 )
 
 // Convert bytes to hex string (ex)"\x01\x02\x03" -> "01 02 03"
@@ -61,5 +63,23 @@ func TestEncodeSingleValue(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	expected = []byte("\xb7\xaf\xfd\xc4\xca\xbf\xf3\x3f")
+	assertBytes(b.Bytes(), expected, t)
+}
+
+func TestEncodeString(t *testing.T) {
+	var b bytes.Buffer
+	enc := NewEncoder(&b, binary.LittleEndian)
+
+	// string with terminator
+	b.Reset()
+	s := StringWithTerminator{
+		Value:      "こんにちは\x00いい天気ですね",
+		Encoding:   japanese.ShiftJIS,
+		Terminator: byte(0x00),
+	}
+	if err := enc.Encode(&s); err != nil {
+		t.Fatalf(err.Error())
+	}
+	expected := []byte("\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd\x00")
 	assertBytes(b.Bytes(), expected, t)
 }
