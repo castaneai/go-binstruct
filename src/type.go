@@ -14,7 +14,7 @@ type StringWithTerminator struct {
 	Terminator byte
 }
 
-// MarshalBinary
+// MarshalBinary ...
 func (s *StringWithTerminator) MarshalBinary() ([]byte, error) {
 	enc := s.Encoding.NewEncoder()
 	b, err := enc.Bytes([]byte(s.Value))
@@ -24,7 +24,22 @@ func (s *StringWithTerminator) MarshalBinary() ([]byte, error) {
 
 	termIdx := bytes.IndexByte(b, s.Terminator)
 	if termIdx == -1 {
-		return nil, fmt.Errorf("string %v does not contain terminator: %v", s.Value, s.Terminator)
+		return append([]byte(s.Value), s.Terminator), nil
 	}
 	return b[:termIdx+1], nil
+}
+
+// UnmarshalBinary ...
+func (s *StringWithTerminator) UnmarshalBinary(data []byte) error {
+	dec := s.Encoding.NewDecoder()
+	termIdx := bytes.IndexByte(data, s.Terminator)
+	if termIdx == -1 {
+		return fmt.Errorf("bytes %v does not contain terminator: %v", data, s.Terminator)
+	}
+	u8b, err := dec.Bytes(data[:termIdx])
+	if err != nil {
+		return err
+	}
+	s.Value = string(u8b)
+	return nil
 }

@@ -82,4 +82,16 @@ func TestEncodeString(t *testing.T) {
 	}
 	expected := []byte("\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd\x00")
 	assertBytes(b.Bytes(), expected, t)
+
+	b.Reset()
+	s2 := StringWithTerminator{
+		Value:      "こんにちは",
+		Encoding:   japanese.ShiftJIS,
+		Terminator: byte(0x00),
+	}
+	if err := enc.Encode(&s2); err != nil {
+		t.Fatalf(err.Error())
+	}
+	expected2 := []byte("\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd\x00")
+	assertBytes(b.Bytes(), expected2, t)
 }
