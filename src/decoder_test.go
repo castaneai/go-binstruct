@@ -4,32 +4,24 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
-
-	"golang.org/x/text/encoding/japanese"
-	"reflect"
 )
 
-func TestDecodeString(t *testing.T) {
-	src := []byte("\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd\x00\x82\xb1\x82")
-	expected := "こんにちは"
-
+func TestDecodeBytesWithTerminator(t *testing.T) {
+	src := []byte("\x68\x65\x6C\x6C\x6F\x00")
 	r := bytes.NewReader(src)
+
 	dec := NewDecoder(r, binary.LittleEndian)
-	s := StringWithTerminator{Encoding: japanese.ShiftJIS, Terminator: 0x00}
-	err := dec.Decode(&s)
+	actual := BytesWithTerminator{Terminator: 0x00}
+	err := dec.Decode(&actual)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	t.Logf("s.Value: %v", toHexString([]byte(s.Value)))
-	t.Logf("expected: %v", toHexString([]byte(expected)))
-	if s.Value != expected {
-		t.Errorf("%v != %v\n", s.Value, expected)
-	}
+
+	expected := []byte("hello")
+	AssertDeepEquals(actual.Bytes, expected, t)
 }
 
 func TestDecodeNestedStruct(t *testing.T) {
-	src := []byte("\xFF\xFF\xB1\x7F\x39\x05")
-
 	type InnerStruct struct {
 		UInt32Value uint32
 	}
@@ -38,6 +30,7 @@ func TestDecodeNestedStruct(t *testing.T) {
 		InnerStructValue InnerStruct
 	}
 
+	src := []byte("\xFF\xFF\xB1\x7F\x39\x05")
 	r := bytes.NewReader(src)
 	dec := NewDecoder(r, binary.LittleEndian)
 
@@ -46,7 +39,27 @@ func TestDecodeNestedStruct(t *testing.T) {
 
 	t.Logf("res: %v", actual)
 	expected := OuterStruct{UInt16Value: 0xffff, InnerStructValue: InnerStruct{UInt32Value: 87654321}}
-	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("%v != %v\n", actual, expected)
+	AssertDeepEquals(actual, expected, t)
+}
+
+func TestDecodeNestedBinaryUnMarshalerStruct(t *testing.T) {
+	type InnerStruct struct {
+		StrValue BytesWithTerminator
 	}
+	type OuterStruct struct {
+		UInt16Value uint16
+		InnerStructValue InnerStruct
+	}
+
+	src := []byte("\xFF\xFF\x68\x65\x6C\x6C\x6F\x00")
+	r := bytes.NewReader(src)
+	dec := NewDecoder(r, binary.LittleEndian)
+
+	actual := OuterStruct{}
+	dec.Decode(&actual)
+
+	t.Logf("res: %v", actual)
+	inner := InnerStruct{StrValue: BytesWithTerminator{Bytes: []byte("hello"), Terminator: byte(0x00)}}
+	expected := OuterStruct{UInt16Value: 0xffff, InnerStructValue: inner}
+	AssertDeepEquals(actual, expected, t)
 }

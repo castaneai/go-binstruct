@@ -3,31 +3,9 @@ package binstruct
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
-	"strings"
 	"testing"
-
-	"golang.org/x/text/encoding/japanese"
 )
 
-// Convert bytes to hex string (ex)"\x01\x02\x03" -> "01 02 03"
-func toHexString(bs []byte) string {
-	hs := fmt.Sprintf("%X", bs)
-	ss := make([]string, len(bs), len(bs))
-	for i := 0; i < len(bs); i++ {
-		ss[i] = hs[i*2 : i*2+2]
-	}
-	return strings.Join(ss, " ")
-}
-
-func assertBytes(a, b []byte, t *testing.T) {
-	if !bytes.Equal(a, b) {
-		t.Errorf("assert bytes failed! %v != %v",
-			toHexString(a),
-			toHexString(b),
-		)
-	}
-}
 
 func TestEncodeSingleValue(t *testing.T) {
 	var b bytes.Buffer
@@ -39,7 +17,7 @@ func TestEncodeSingleValue(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	expected := []byte("\x4e\x61\xbc\x00")
-	assertBytes(b.Bytes(), expected, t)
+	AssertDeepEquals(b.Bytes(), expected, t)
 
 	// int64
 	b.Reset()
@@ -47,7 +25,7 @@ func TestEncodeSingleValue(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	expected = []byte("\x79\xdf\x0d\x86\x48\x70\x00\x00")
-	assertBytes(b.Bytes(), expected, t)
+	AssertDeepEquals(b.Bytes(), expected, t)
 
 	// float32
 	b.Reset()
@@ -55,7 +33,7 @@ func TestEncodeSingleValue(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	expected = []byte("\x56\x0e\x49\x40")
-	assertBytes(b.Bytes(), expected, t)
+	AssertDeepEquals(b.Bytes(), expected, t)
 
 	// float64
 	b.Reset()
@@ -63,40 +41,38 @@ func TestEncodeSingleValue(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	expected = []byte("\xb7\xaf\xfd\xc4\xca\xbf\xf3\x3f")
-	assertBytes(b.Bytes(), expected, t)
+	AssertDeepEquals(b.Bytes(), expected, t)
 }
 
-func TestEncodeString(t *testing.T) {
-	var b bytes.Buffer
-	enc := NewEncoder(&b, binary.LittleEndian)
-
-	s := StringWithTerminator{
-		Value:      "こんにちは\x00いい天気ですね",
-		Encoding:   japanese.ShiftJIS,
+func TestEncodeStringWithTerminator(t *testing.T) {
+	s := BytesWithTerminator{
+		Bytes:      []byte("hello"),
 		Terminator: byte(0x00),
 	}
+
+	var actual bytes.Buffer
+	enc := NewEncoder(&actual, binary.LittleEndian)
 	if err := enc.Encode(&s); err != nil {
 		t.Fatalf(err.Error())
 	}
-	expected := []byte("\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd\x00")
-	assertBytes(b.Bytes(), expected, t)
+	expected := []byte("\x68\x65\x6C\x6C\x6F\x00")
+	AssertDeepEquals(actual.Bytes(), expected, t)
 }
 
 func TestEncodeSimpleStruct(t *testing.T) {
-	var b bytes.Buffer
-	enc := NewEncoder(&b, binary.LittleEndian)
-
 	type SimpleStruct struct {
 		Int32Value int32
 		Float64Value float64
 	}
-
 	s := SimpleStruct{Int32Value: 12345678, Float64Value: 3.141592}
+
+	var actual bytes.Buffer
+	enc := NewEncoder(&actual, binary.LittleEndian)
 	if err := enc.Encode(&s); err != nil {
 		t.Fatalf(err.Error())
 	}
 	expected := []byte("\x4e\x61\xbc\x00\x7a\x00\x8b\xfc\xfa\x21\x09\x40")
-	assertBytes(b.Bytes(), expected, t)
+	AssertDeepEquals(actual.Bytes(), expected, t)
 }
 
 func TestEncodeNestedStruct(t *testing.T) {
@@ -110,11 +86,33 @@ func TestEncodeNestedStruct(t *testing.T) {
 	inner := InnerStruct{UInt32Value: 87654321}
 	outer := OuterStruct{UInt16Value: 0xffff, InnerStructValue: inner}
 
-	var b bytes.Buffer
-	enc := NewEncoder(&b, binary.LittleEndian)
+	var actual bytes.Buffer
+	enc := NewEncoder(&actual, binary.LittleEndian)
 	if err := enc.Encode(&outer); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	t.Logf("nested struct: %v", toHexString(b.Bytes()))
+	expected := []byte("\xFF\xFF\xB1\x7F\x39\x05")
+	AssertDeepEquals(actual.Bytes(), expected, t)
+}
+
+func TestEncodeNestedBinaryMarshalerStruct(t *testing.T) {
+	type InnerStruct struct {
+		StrValue BytesWithTerminator
+	}
+	type OuterStruct struct {
+		UInt16Value uint16
+		InnerStructValue InnerStruct
+	}
+	inner := InnerStruct{StrValue: BytesWithTerminator{Bytes: []byte("hello"), Terminator: byte(0x00)}}
+	outer := OuterStruct{UInt16Value: 0xffff, InnerStructValue: inner}
+
+	var actual bytes.Buffer
+	enc := NewEncoder(&actual, binary.LittleEndian)
+	if err := enc.Encode(&outer); err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	expected := []byte("\xFF\xFF\x68\x65\x6C\x6C\x6F\x00")
+	AssertDeepEquals(actual.Bytes(), expected, t)
 }

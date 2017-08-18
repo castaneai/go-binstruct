@@ -60,6 +60,7 @@ func (dec *Decoder) decode(e interface{}) error {
 	case reflect.Struct:
 		l := vp.NumField()
 		for i := 0; i < l; i++ {
+			fmt.Printf("[decode]field %v (type: %v)\n", vp.Type().Field(i).Name, vp.Type().Name())
 			err = dec.Decode(vp.Field(i).Addr().Interface())
 			if err != nil {
 				return err
