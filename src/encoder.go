@@ -3,7 +3,6 @@ package binstruct
 import (
 	"encoding"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"reflect"
 )
@@ -25,7 +24,7 @@ func (enc *Encoder) Encode(e interface{}) error {
 	if ok {
 		return enc.encodeBinaryMarshaler(v)
 	}
-	return enc.encodeValue(reflect.ValueOf(e))
+	return enc.encode(e)
 }
 
 func (enc *Encoder) encodeBinaryMarshaler(v encoding.BinaryMarshaler) error {
@@ -37,53 +36,33 @@ func (enc *Encoder) encodeBinaryMarshaler(v encoding.BinaryMarshaler) error {
 	return errr
 }
 
-func (enc *Encoder) encodeValue(value reflect.Value) error {
-	switch value.Type().Kind() {
-	case reflect.Int,
-		reflect.Int32,
-		reflect.Uint,
-		reflect.Uint32:
-		return enc.encodeUint32(value)
-	case reflect.Int64,
-		reflect.Uint64:
-		return enc.encodeUint64(value)
-	case reflect.Float32:
-		return enc.encodeFloat32(value)
-	case reflect.Float64:
-		return enc.encodeFloat64(value)
-	case reflect.Ptr:
-		return enc.encodeStruct(value)
-	default:
-		return fmt.Errorf("binstruct: cannot encode type: %v", value.Type().Kind())
-	}
-	return nil
-}
+func (enc *Encoder) encode(e interface{}) error {
+	var err error
 
-func (enc *Encoder) encodePtr(value reflect.Value) error {
-	switch value.Elem().Kind() {
+	// BinaryMarshalerをネストしている可能性があるものは、内側まで掘る
+	v := reflect.ValueOf(e)
+	switch v.Type().Kind() {
+	case reflect.Array, reflect.Slice:
+		l := v.Len()
+		for i := 0; i < l; i++ {
+			err = enc.Encode(v.Index(i).Interface())
+			if err != nil {
+				return err
+			}
+		}
 	case reflect.Struct:
-		return enc.encodeStruct(value.Elem())
+		l := v.NumField()
+		for i := 0; i < l; i++ {
+			err = enc.Encode(v.Field(i).Interface())
+			if err != nil {
+				return err
+			}
+		}
+	case reflect.Ptr:
+		return enc.Encode(v.Elem().Interface())
+
 	default:
-		return fmt.Errorf("binstruct: cannot encode type: *%v", value.Elem().Kind())
+		return binary.Write(enc.w, enc.byteOrder, e)
 	}
-}
-
-func (enc *Encoder) encodeStruct(value reflect.Value) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (enc *Encoder) encodeUint32(value reflect.Value) error {
-	return binary.Write(enc.w, enc.byteOrder, uint32(value.Int()))
-}
-
-func (enc *Encoder) encodeUint64(value reflect.Value) error {
-	return binary.Write(enc.w, enc.byteOrder, uint64(value.Int()))
-}
-
-func (enc *Encoder) encodeFloat32(value reflect.Value) error {
-	return binary.Write(enc.w, enc.byteOrder, float32(value.Float()))
-}
-
-func (enc *Encoder) encodeFloat64(value reflect.Value) error {
-	return binary.Write(enc.w, enc.byteOrder, float64(value.Float()))
+	return err
 }

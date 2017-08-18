@@ -70,8 +70,6 @@ func TestEncodeString(t *testing.T) {
 	var b bytes.Buffer
 	enc := NewEncoder(&b, binary.LittleEndian)
 
-	// string with terminator
-	b.Reset()
 	s := StringWithTerminator{
 		Value:      "こんにちは\x00いい天気ですね",
 		Encoding:   japanese.ShiftJIS,
@@ -82,16 +80,41 @@ func TestEncodeString(t *testing.T) {
 	}
 	expected := []byte("\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd\x00")
 	assertBytes(b.Bytes(), expected, t)
+}
 
-	b.Reset()
-	s2 := StringWithTerminator{
-		Value:      "こんにちは",
-		Encoding:   japanese.ShiftJIS,
-		Terminator: byte(0x00),
+func TestEncodeSimpleStruct(t *testing.T) {
+	var b bytes.Buffer
+	enc := NewEncoder(&b, binary.LittleEndian)
+
+	type SimpleStruct struct {
+		Int32Value int32
+		Float64Value float64
 	}
-	if err := enc.Encode(&s2); err != nil {
+
+	s := SimpleStruct{Int32Value: 12345678, Float64Value: 3.141592}
+	if err := enc.Encode(&s); err != nil {
 		t.Fatalf(err.Error())
 	}
-	expected2 := []byte("\x82\xb1\x82\xf1\x82\xc9\x82\xbf\x82\xcd\x00")
-	assertBytes(b.Bytes(), expected2, t)
+	expected := []byte("\x4e\x61\xbc\x00\x7a\x00\x8b\xfc\xfa\x21\x09\x40")
+	assertBytes(b.Bytes(), expected, t)
+}
+
+func TestEncodeNestedStruct(t *testing.T) {
+	type InnerStruct struct {
+		UInt32Value uint32
+	}
+	type OuterStruct struct {
+		UInt16Value uint16
+		InnerStructValue InnerStruct
+	}
+	inner := InnerStruct{UInt32Value: 87654321}
+	outer := OuterStruct{UInt16Value: 0xffff, InnerStructValue: inner}
+
+	var b bytes.Buffer
+	enc := NewEncoder(&b, binary.LittleEndian)
+	if err := enc.Encode(&outer); err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	t.Logf("nested struct: %v", toHexString(b.Bytes()))
 }
